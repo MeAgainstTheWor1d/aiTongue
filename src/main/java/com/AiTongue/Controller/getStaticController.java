@@ -5,19 +5,34 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+
+import com.AiTongue.Const.GlobalConstantsUpdater;
 import com.AiTongue.Vo.userTongueImgForm;
+import com.AiTongue.service.getStaticService;
 import com.utils.BASE64DecodedMultipartFile;
+import com.utils.HttpUtils;
 import org.apache.commons.io.FileUtils;
+import org.apache.http.entity.mime.MultipartEntity;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 
+import static com.AiTongue.Const.GlobalConstantsUpdater.appId;
+import static com.AiTongue.Const.GlobalConstantsUpdater.authorization;
+
 /**
- * @Author: 翰林猿
+ * @Author: 袁健城
  * @Description: 获取图片以及上传图片至服务器
  **/
 
@@ -25,6 +40,9 @@ import java.util.Random;
 @RestController
 @RequestMapping
 public class getStaticController {
+
+    @Autowired
+    private getStaticService getStaticService;
 
     /**
      * 获取resource/static/images下的图片，存放一些前端的背景图和头像。
@@ -34,76 +52,40 @@ public class getStaticController {
      */
 
     @GetMapping({"/getStaticImg/{imgName}"})
-    public byte[] getStaticImg(@PathVariable("imgName") String imgName,
-                                               @RequestHeader HttpHeaders requestHeaders) {
-        //规定图片存在文件夹
-        String imagePath = "static/images/" + imgName;
-
-        //获取文件夹路径的资源
-        Resource resource = new ClassPathResource(imagePath);
-
-        try (InputStream inputStream = resource.getInputStream()) {
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            byte[] buffer = new byte[1024];
-            int bytesRead;
-
-            while ((bytesRead = inputStream.read(buffer)) != -1) {
-                outputStream.write(buffer, 0, bytesRead);
-            }
-
-            byte[] imageBytes = outputStream.toByteArray();
-
-            String fileExtension = getFileExtension(imgName);
-            if ("jpg".equalsIgnoreCase(fileExtension) || "jpeg".equalsIgnoreCase(fileExtension)) {
-                requestHeaders.setContentType(MediaType.IMAGE_JPEG);
-            } else if ("png".equalsIgnoreCase(fileExtension)) {
-                requestHeaders.setContentType(MediaType.IMAGE_PNG);
-            } else {
-                //当服务器返回的数据是二进制格式而无法明确指定具体的文件类型时，通常会使用这个 MIME 类型。
-                requestHeaders.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-            }
-            return imageBytes;
-        } catch (IOException e) {
-            System.out.println("图片读取过程失败");
-            return null;
-        }
+    public byte[] getStaticImg(@PathVariable("imgName") String imgName, @RequestHeader HttpHeaders requestHeaders) {
+        //获取图片byte流以便下载
+        byte[] staticImg = getStaticService.getStaticImg(imgName, requestHeaders);
+        return staticImg;
     }
 
 
     /**
-     * 上传图片至服务器的static/images文件夹下
+     * 上传图片至服务器的static/images文件夹下，并做出舌诊相关业务逻辑。
      * @param userTongueImgForm
      * @return
      * @throws IOException
      */
 
     @PostMapping("/uploadImg")
-    public String uploadImg(@RequestBody userTongueImgForm userTongueImgForm) throws IOException {
-        String nickName = userTongueImgForm.getNickName();
-        String base64Data = userTongueImgForm.getBase64Data();
-        MultipartFile imgFile = BASE64DecodedMultipartFile.base64ToMultipart(base64Data);
+    public double uploadImg(@RequestBody userTongueImgForm userTongueImgForm) throws IOException {
 
+        //上传照片至服务器返回图片名字，然后通过getStaticImg接口+filename获取图片，测试用户上传的图片是否有舌头。如果有，再调用消耗次数的接口
+        String filename = getStaticService.uploadImg(userTongueImgForm);
 
-        // 生成5位随机数
-        String randomSuffix = String.format("%05d", (int) (Math.random() * 100000));
+        double checkTongueExist = getStaticService.checkTongueExist(filename);
 
-        // 构建文件名
-        String fileName = nickName+"Tongue" + randomSuffix + ".jpg";
+        String filePath = "src/main/resources/static/images/hjb.png";
 
-        // 指定本地保存路径和文件名，保存到当前项目的 images 文件夹下
-        String separator = File.separator;
+        //如果为1，通过检测，执行ai舌诊
+        if (checkTongueExist!=0){
+            String quanXiTongueReport = getStaticService.quanXiTongue(checkTongueExist, userTongueImgForm, filePath);
+        }else {
+            //返回，图片内没有舌头
+            return 0;
+        }
+        System.out.println("checkTongueExist:"+checkTongueExist);
 
-        String folderPath = "static/images/";
-
-        Path filePath = Paths.get(folderPath + separator + fileName);
-
-        // 将 MultipartFile 转换为 File
-        File file = new File(filePath.toUri());
-        FileUtils.writeByteArrayToFile(file, imgFile.getBytes());
-
-        System.out.println("图片保存成功：" + filePath);
-
-        return "1";
+        return checkTongueExist;
     }
 
     private String generateRandomSuffix() {
@@ -117,6 +99,4 @@ public class getStaticController {
         int dotIndex = imgName.lastIndexOf(".");
         return dotIndex == -1 ? "" : imgName.substring(dotIndex + 1);
     }
-
-
 }

@@ -1,25 +1,34 @@
 package com.AiTongue.service;
 
+import com.AiTongue.Const.GlobalConstantsUpdater;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.utils.HttpUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.*;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+import static com.AiTongue.Const.GlobalConstantsUpdater.appId;
+import static com.AiTongue.Const.GlobalConstantsUpdater.authorization;
+
 /**
- * @Author: 翰林猿
- * @Description: 舌诊接口的一些相关服务
+ * @Author: 袁健城
+ * @Description: userController的一些主要业务代码
  **/
-public class aiTongueService {
 
-    public static void main(String[] args) throws IOException {
-        //register();
-        login();
-    }
+@Service
+public class userService {
 
-    public static String login() throws IOException {
+    @Autowired
+    private GlobalConstantsUpdater globalConstantsUpdater;
+
+
+    public String login(String appId, String password) throws IOException {
 
         //获取userKey网址
         String getUserKeyUrl = "https://api.aikanshe.com/account/login?tokenKey=get";
@@ -32,14 +41,12 @@ public class aiTongueService {
 
         JsonNode dataNode = jsonNode.get("data");
 
-        String tokenKey = "";
         String userKey = "";
         //2023.11.28日注册的用户名和密码，200次，100元
-        String appId = "13602676990";
-        String password = "20030515";
+//        String appId = "13602676990";
+//        String password = "20030515";
 
         if (dataNode != null) {
-            tokenKey = dataNode.get("tokenKey").asText();
             userKey = dataNode.get("userKey").asText();
         } else {
             System.out.println("获取tokenKey和userKey的dataNode为空");
@@ -68,11 +75,11 @@ public class aiTongueService {
         //获取登录接口返回的data里的数据
         JsonNode loginDataNode = loginResponseNode.get("data");
 
-        System.out.println("data"+dataNode);
+        System.out.println("data" + dataNode);
 
         //获取登录接口返回的meta里的数据
         JsonNode meta = loginResponseNode.get("meta");
-        System.out.println("meta="+meta);
+        System.out.println("meta=" + meta);
 
         String success = meta.get("success").asText();
         System.out.println(success);
@@ -82,13 +89,13 @@ public class aiTongueService {
             System.out.println("检查登录失败返回的loginResponse数据：" + loginResponse);
         }
 
-        String jwt = null;
         //获取jwt令牌
-        jwt = loginDataNode.get("jwt").asText();
+        System.out.println("执行更新jwt操作");
+        authorization = loginDataNode.get("jwt").asText();
 
-        if (jwt != null) {
-            System.out.println("登录成功，jwt获取成功，查询剩余使用次数.....");
-            checkAvailableTimes("v101",appId, jwt);
+        if (authorization != null) {
+            System.out.println("登录成功，jwt更新，同时查询剩余使用次数.....");
+            checkAvailableTimes("v101", appId, authorization);
         }
 
         return "1";
@@ -96,7 +103,7 @@ public class aiTongueService {
     }
 
 
-    public static String register() throws IOException {
+    public String register(String username, String email, String password) throws IOException {
         //获取userkey网址
         String getUserKeyUrl = "https://api.aikanshe.com/account/login?tokenKey=get";
         // 调用GET方式获取tokenKey和userKey
@@ -141,11 +148,11 @@ public class aiTongueService {
 
             // 请求体JSON数据
             String requestBody = "{"
-                    + "\"email\": \"1783384763@qq.com\","
+                    + "\"email\": \"" + email + "\","
                     + "\"methodName\": \"register\","
-                    + "\"password\": \"20030515\","
+                    + "\"password\": \"" + password + "\","
                     + "\"userKey\": \"" + userKey + "\","
-                    + "\"username\": \"13602676990\""
+                    + "\"username\": \"" + username + "\","
                     + "}";
 
             String registerResponse = HttpUtils.sendPostJsonBody(registerApiUrl, requestBody);
@@ -159,23 +166,40 @@ public class aiTongueService {
         return "1";
     }
 
-    public static void checkAvailableTimes(String version,String appId, String authorization) throws IOException {
+    public static void checkAvailableTimes(String version, String appId, String authorization) throws IOException {
 
         System.out.println("检查可用次数中。。。");
         // 检查可用次数接口地址
         String checkAvailableTimesUrl = "https://api.aikanshe.com/pro/getAvalTimes/" + version;
 
         // 构建请求头
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Content-Type", "application/json");
-        headers.put("Authorization", authorization);
-        headers.put("appId",appId);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Authorization", authorization);
+        headers.set("appId", appId);
+
+
+        // Create a HttpEntity with headers
+        HttpEntity<String> requestEntity = new HttpEntity<>(null, headers);
+
+        // Create RestTemplate instance
+        RestTemplate restTemplate = new RestTemplate();
+
+        // Make a POST request to check available times
+        ResponseEntity<String> responseEntity = restTemplate.exchange(
+                checkAvailableTimesUrl,
+                HttpMethod.POST,
+                requestEntity,
+                String.class
+        );
+
+        String checkTimesResponse = responseEntity.getBody();
 
         //检查jwt是否正确
         //System.out.println("authorization  =  "+authorization);
 
         // 调用POST方式检查可用次数
-        String checkTimesResponse = HttpUtils.sendPostHeaders(checkAvailableTimesUrl, headers);
+//        String checkTimesResponse = HttpUtils.sendPostHeaders(checkAvailableTimesUrl, headers);
 
         // 输出检查可用次数响应体
         //System.out.println("Check Times Response: " + checkTimesResponse);
@@ -184,7 +208,9 @@ public class aiTongueService {
         ObjectMapper objectMapper = new ObjectMapper();
         JsonNode jsonNode = objectMapper.readTree(checkTimesResponse);
 
-        System.out.println("剩余可用次数为："+jsonNode.get("data").asText()+"次");
+        System.out.println("Remaining available times: " + jsonNode.get("data").asText() + " times");
+
+        System.out.println("剩余可用次数为：" + jsonNode.get("data").asText() + "次");
     }
 
 

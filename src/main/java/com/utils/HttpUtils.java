@@ -6,11 +6,14 @@ import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.apache.http.entity.mime.content.ContentBody;
+import org.apache.http.entity.mime.content.FileBody;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.util.EntityUtils;
+
+import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 
@@ -50,7 +53,7 @@ public class HttpUtils {
         return sendPostRequest(url, null, queryParams, null, null);
     }
 
-    public static String sendPostFormData(String url, Map<String, String> formData) throws IOException {
+    public static String sendPostFormData(String url, Map<String, Object> formData) throws IOException {
         return sendPostRequest(url, null, null, formData, null);
     }
 
@@ -62,7 +65,7 @@ public class HttpUtils {
         return sendPostRequest(url, headers, queryParams, null, null);
     }
 
-    public static String sendPostHeadersAndFormData(String url, Map<String, String> headers, Map<String, String> formData) throws IOException {
+    public static String sendPostHeadersAndFormData(String url, Map<String, String> headers, Map<String, Object> formData) throws IOException {
         return sendPostRequest(url, headers, null, formData, null);
     }
 
@@ -70,7 +73,7 @@ public class HttpUtils {
         return sendPostRequest(url, headers, null, null, jsonBody);
     }
 
-    public static String sendPostQueryParamsAndFormData(String url, Map<String, String> queryParams, Map<String, String> formData) throws IOException {
+    public static String sendPostQueryParamsAndFormData(String url, Map<String, String> queryParams, Map<String, Object> formData) throws IOException {
         return sendPostRequest(url, null, queryParams, formData, null);
     }
 
@@ -78,16 +81,16 @@ public class HttpUtils {
         return sendPostRequest(url, null, queryParams, null, jsonBody);
     }
 
-    public static String sendPostFormDataAndJsonBody(String url, Map<String, String> formData, String jsonBody) throws IOException {
+    public static String sendPostFormDataAndJsonBody(String url, Map<String, Object> formData, String jsonBody) throws IOException {
         return sendPostRequest(url, null, null, formData, jsonBody);
     }
 
-    public static String sendPostAll(String url, Map<String, String> headers, Map<String, String> queryParams, Map<String, String> formData, String jsonBody) throws IOException {
+    public static String sendPostAll(String url, Map<String, String> headers, Map<String, String> queryParams, Map<String, Object> formData, String jsonBody) throws IOException {
         return sendPostRequest(url, headers, queryParams, formData, jsonBody);
     }
 
 
-    public static String sendPostRequest(String url, Map<String, String> headers, Map<String, String> queryParams, Map<String, String> formData, String jsonBody) throws IOException {
+    public static String sendPostRequest(String url, Map<String, String> headers, Map<String, String> queryParams, Map<String, Object> formData, String jsonBody) throws IOException {
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
             // 添加query类型的查询参数到URL
             if (queryParams != null && !queryParams.isEmpty()) {
@@ -117,11 +120,21 @@ public class HttpUtils {
                 httpPost.setEntity(stringEntity);
             }
 
-            // 构造MultipartEntityBuilder用于传递其他参数
+            // 修改 MultipartEntityBuilder 部分
             if (formData != null && !formData.isEmpty()) {
                 MultipartEntityBuilder builder = MultipartEntityBuilder.create();
-                for (Map.Entry<String, String> entry : formData.entrySet()) {
-                    builder.addPart(entry.getKey(), (ContentBody) new StringEntity(entry.getValue(), ContentType.TEXT_PLAIN));
+                for (Map.Entry<String, Object> entry : formData.entrySet()) {
+                    String key = entry.getKey();
+                    Object value = entry.getValue();
+
+                    if (value instanceof String) {
+                        // 如果值是字符串，直接添加文本字段
+                        builder.addTextBody(key, (String) value, ContentType.TEXT_PLAIN);
+                    } else if (value instanceof File) {
+                        // 如果值是文件，使用 FileBody 添加文件字段
+                        builder.addPart(key, new FileBody((File) value));
+                        System.out.println("Added file to formData: " + key + " = " + ((File) value).getPath());
+                    }
                 }
                 httpPost.setEntity(builder.build());
             }
@@ -143,23 +156,5 @@ public class HttpUtils {
             return null;
         }
     }
-
-    /**
-     *
-     * public static void main(String[] args) {
-        try {
-            //  GET request例子
-            String getResponse = sendGetRequest("https://jsonplaceholder.typicode.com/posts/1");
-            System.out.println("GET Response: " + getResponse);
-
-            //  POST request例子
-            String postRequestBody = "{\"title\":\"foo\",\"body\":\"bar\",\"userId\":1}";
-            String postResponse = sendPostRequest("https://jsonplaceholder.typicode.com/posts", postRequestBody);
-            System.out.println("POST Response: " + postResponse);
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }*/
 
 }

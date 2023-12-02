@@ -1,3 +1,5 @@
 spring:
   profiles:
     active: dev
+
+lastUpdateTimeFile: classpath:src/main/resources/lastUpdateTime.txt
