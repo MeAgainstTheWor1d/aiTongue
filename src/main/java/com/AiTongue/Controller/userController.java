@@ -2,10 +2,7 @@ package com.AiTongue.Controller;
 
 import com.AiTongue.service.userService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 
@@ -21,6 +18,15 @@ public class userController {
 
     @Autowired
     private userService userService;
+
+    @GetMapping("/test")
+    @ResponseBody
+    public String  test() throws IOException {
+        String jarDirectory = userService.getJarDirectory();
+        System.out.println("JAR Directory: " + jarDirectory);
+        return "JAR Directory: " + jarDirectory;
+    }
+
     /**
      * 注册功能，输入想注册的，账号，密码，电子邮箱
      */

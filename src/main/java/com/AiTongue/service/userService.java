@@ -1,6 +1,8 @@
 package com.AiTongue.service;
 
-import com.AiTongue.Const.GlobalConstantsUpdater;
+import com.AiTongue.Const.TokenManager;
+import com.AiTongue.Vo.dataVo;
+import com.AiTongue.YourClass;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.utils.HttpUtils;
@@ -9,12 +11,19 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URISyntaxException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-import static com.AiTongue.Const.GlobalConstantsUpdater.appId;
-import static com.AiTongue.Const.GlobalConstantsUpdater.authorization;
+
 
 /**
  * @Author: 袁健城
@@ -23,13 +32,15 @@ import static com.AiTongue.Const.GlobalConstantsUpdater.authorization;
 
 @Service
 public class userService {
-
     @Autowired
-    private GlobalConstantsUpdater globalConstantsUpdater;
+    private TokenManager tokenManager;
+
+    public String getJarDirectory() throws UnsupportedEncodingException {
+        return "1";
+    }
 
 
     public String login(String appId, String password) throws IOException {
-
         //获取userKey网址
         String getUserKeyUrl = "https://api.aikanshe.com/account/login?tokenKey=get";
         // 调用GET方式获取tokenKey和userKey
@@ -42,6 +53,7 @@ public class userService {
         JsonNode dataNode = jsonNode.get("data");
 
         String userKey = "";
+
         //2023.11.28日注册的用户名和密码，200次，100元
 //        String appId = "13602676990";
 //        String password = "20030515";
@@ -51,9 +63,6 @@ public class userService {
         } else {
             System.out.println("获取tokenKey和userKey的dataNode为空");
         }
-
-//        System.out.println("tokenkey" + tokenKey);
-//        System.out.println("userkey" + userKey);
 
         //登录url
         String loginUrl = "https://api.aikanshe.com/account/login";
@@ -67,39 +76,33 @@ public class userService {
                 + "\"userKey\": \"" + userKey + "\""
                 + "}";
 
-        //System.out.println("检查登录请求体："+requestBody);
-
         String loginResponse = HttpUtils.sendPostJsonBody(loginUrl, requestBody);
         JsonNode loginResponseNode = objectMapper.readTree(loginResponse);
 
         //获取登录接口返回的data里的数据
         JsonNode loginDataNode = loginResponseNode.get("data");
-
-        System.out.println("data" + dataNode);
+        //System.out.println("data" + dataNode);
 
         //获取登录接口返回的meta里的数据
         JsonNode meta = loginResponseNode.get("meta");
-        System.out.println("meta=" + meta);
+        //System.out.println("meta=" + meta);
 
         String success = meta.get("success").asText();
-        System.out.println(success);
+        //System.out.println(success);
+        String globalToken = tokenManager.getGlobalToken();
 
         if (!success.equals("true")) {
             System.out.println("登录失败!未获取jwt");
             System.out.println("检查登录失败返回的loginResponse数据：" + loginResponse);
+        }else {
+            //System.out.println("执行更新jwt操作");
+            String jwt = loginDataNode.get("jwt").asText();
+            //System.out.println("jwt=" + jwt);
+            tokenManager.setGlobalToken(jwt);
+            System.out.println("登录成功，jwt更新，查询剩余使用次数.....");
+            checkAvailableTimes("v101", appId, jwt);
         }
-
-        //获取jwt令牌
-        System.out.println("执行更新jwt操作");
-        authorization = loginDataNode.get("jwt").asText();
-
-        if (authorization != null) {
-            System.out.println("登录成功，jwt更新，同时查询剩余使用次数.....");
-            checkAvailableTimes("v101", appId, authorization);
-        }
-
         return "1";
-
     }
 
 
@@ -168,7 +171,7 @@ public class userService {
 
     public static void checkAvailableTimes(String version, String appId, String authorization) throws IOException {
 
-        System.out.println("检查可用次数中。。。");
+        System.out.println("检查可用次数中....");
         // 检查可用次数接口地址
         String checkAvailableTimesUrl = "https://api.aikanshe.com/pro/getAvalTimes/" + version;
 
@@ -194,15 +197,6 @@ public class userService {
         );
 
         String checkTimesResponse = responseEntity.getBody();
-
-        //检查jwt是否正确
-        //System.out.println("authorization  =  "+authorization);
-
-        // 调用POST方式检查可用次数
-//        String checkTimesResponse = HttpUtils.sendPostHeaders(checkAvailableTimesUrl, headers);
-
-        // 输出检查可用次数响应体
-        //System.out.println("Check Times Response: " + checkTimesResponse);
 
         // 解析获取到的可用次数信息
         ObjectMapper objectMapper = new ObjectMapper();

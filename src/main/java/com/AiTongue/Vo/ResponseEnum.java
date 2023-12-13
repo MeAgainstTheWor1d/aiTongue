@@ -11,8 +11,8 @@ public enum ResponseEnum {
 
 	ERROR(-1, "服务端错误"),
 	SUCCESS(0, "成功"),
-	IMG_NOT_EXIST(1, "图片不存在");
-
+	IMG_NOT_EXIST(1, "图片不存在"),
+	NOT_EXIST_TONGUE(2,"图片内没有舌头");
 	Integer code;
 	String desc;
 
